@@ -1,0 +1,6 @@
+"path": [
+	{
+	   "matcher": "glob",
+	   "value": "/foo/*/bar/spam"
+	}
+ ]

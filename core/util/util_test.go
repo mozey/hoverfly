@@ -111,3 +111,102 @@ func Test_SortQueryString_PreservesBothEqualsAndNoEqualsWithEmptyValue(t *testin
 
 	Expect(SortQueryString("a&b&c=&d&e=&f=")).To(Equal("a&b&c=&d&e=&f="))
 }
+
+func Test_GetContentTypeFromHeaders_ReturnsEmptyStringIfHeadersAreNil(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(GetContentTypeFromHeaders(nil)).To(Equal(""))
+}
+
+func Test_GetContentTypeFromHeaders_ReturnsEmptyStringIfHeadersAreEmpty(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(GetContentTypeFromHeaders(map[string][]string{})).To(Equal(""))
+}
+
+func Test_GetContentTypeFromHeaders_ReturnsJsonIfJson(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(GetContentTypeFromHeaders(map[string][]string{
+		"Content-Type": {"application/json"},
+	})).To(Equal("json"))
+}
+
+func Test_GetContentTypeFromHeaders_ReturnsXmlIfXml(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(GetContentTypeFromHeaders(map[string][]string{
+		"Content-Type": {"application/xml"},
+	})).To(Equal("xml"))
+}
+
+func Test_JSONMarshal_MarshalsIntoJson(t *testing.T) {
+	RegisterTestingT(t)
+
+	jsonBytes, err := JSONMarshal(map[string]string{
+		"test": "testing",
+	})
+
+	Expect(err).To(BeNil())
+	Expect(string(jsonBytes)).To(Equal(`{"test":"testing"}` + "\n"))
+}
+
+func Test_MinifyJson_MinifiesJsonString(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(MinifyJson(`{
+		"test": {
+			"something": [
+				1, 2, 3
+			]
+		}
+	}`)).To(Equal(`{"test":{"something":[1,2,3]}}`))
+}
+
+func Test_MinifyJson_ErrorsOnInvalidJsonString(t *testing.T) {
+	RegisterTestingT(t)
+
+	_, err := MinifyJson(`{
+		"test": {
+			"something":
+				1, 2, 3
+			
+		}
+	}`)
+
+	Expect(err).ToNot(BeNil())
+}
+
+func Test_MinifyXml_MinifiesXmlString(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(MinifyXml(`<xml>
+		<document  key="value">test</document>
+	</xml>`)).To(Equal(`<xml><document key="value">test</document></xml>`))
+}
+
+func Test_MinifyXml_SimplifiesXmlString(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(MinifyXml(`<xml>
+		<document></document>
+	</xml>`)).To(Equal(`<xml><document/></xml>`))
+}
+
+func Test_CopyMap(t *testing.T) {
+	RegisterTestingT(t)
+
+	originalMap := make(map[string]string)
+	originalMap["first"] = "1"
+	originalMap["second"] = "2"
+
+	newMap := CopyMap(originalMap)
+
+	delete(originalMap, "first")
+	originalMap["second"] = ""
+	originalMap["third"] = "3"
+
+	Expect(newMap).To(HaveLen(2))
+	Expect(newMap["first"]).To(Equal("1"))
+	Expect(newMap["second"]).To(Equal("2"))
+}

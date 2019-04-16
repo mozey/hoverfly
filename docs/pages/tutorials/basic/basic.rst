@@ -9,9 +9,10 @@ Basic tutorials
     exportingsimulations/exportingsimulations
     importingsimulations/importingsimulations
     delays/addingdelays
-    addingtemplates/addingtemplates
+    loosematching/loosematching
     randomlatency/randomlatency
     modifyingresponses/modifyingresponses
     https/https
     asawebserver/asawebserver
     specificurls/specificurls
+    capturingsequences/capturingsequences

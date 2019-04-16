@@ -43,6 +43,11 @@ requests.db
 *.iml
 target
 
+# Vim
+*.swp
+*.swo
+*.out
+
 core/cmd/hoverfly/hoverfly
 hoverctl/hoverctl
 functional-tests/core/bin/hoverfly
@@ -51,6 +56,9 @@ functional-tests/hoverctl/bin/hoverctl
 functional-tests/hoverctl/.hoverfly/cache/*.json
 functional-tests/hoverctl/.hoverfly/config.yaml
 functional-tests/hoverctl/.hoverfly/*.pid
-functional-tests/hoverctl/bin/hoverctl
-
+functional-tests/hoverctl/testdata-gen
+functional-tests/core/bin/hoverctl
 .DS_Store
+test.db
+/vendor/vendor.json
+config.yaml

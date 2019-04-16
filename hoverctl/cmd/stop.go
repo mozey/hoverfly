@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/SpectoLabs/hoverfly/hoverctl/wrapper"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +19,22 @@ is stopped.
 `,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		err := hoverfly.Stop(hoverflyDirectory)
+		checkTargetAndExit(target)
+
+		if !wrapper.IsLocal(target.Host) {
+			handleIfError(fmt.Errorf("Unable to stop an instance of Hoverfly on a remote host (%s host: %s)\n\nRun `hoverctl start --new-target <name>` to start it", target.Name, target.Host))
+		}
+
+		err := wrapper.CheckIfRunning(*target)
+		if err != nil {
+			handleIfError(err)
+		}
+
+		err = wrapper.Stop(*target)
 		handleIfError(err)
+
+		config.NewTarget(*target)
+		handleIfError(config.WriteToFile(hoverflyDirectory))
 
 		fmt.Println("Hoverfly has been stopped")
 	},

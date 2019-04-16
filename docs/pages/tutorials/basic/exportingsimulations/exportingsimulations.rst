@@ -44,3 +44,21 @@ You'll now see a ``simulation.json`` file in your current working directory, whi
 In case you are curious, the sequence diagram for this process looks like this:
 
 .. figure:: exportingsimulations.mermaid.png
+
+
+.. note::
+   By default, request headers are not captured. If you want to capture headers, you will need to specify them when setting capture mode.
+
+   .. code:: bash
+
+      hoverctl mode capture --headers "User-Agent,Content-Type,Authorization"
+      hoverctl mode capture --all-headers
+
+
+.. note::
+   It is possible to filter and export simulation to separate JSON files by providing a plain text or regex string to the ``--url-pattern`` flag:
+
+   .. code:: bash
+
+      hoverctl export echo.json --url-pattern "echo.jsontest.com"     // export simulations for echo.jsontest.com only
+      hoverctl export api.json --url-pattern "(.+).jsontest.com"      // export simulations for all jsontest.com subdomains

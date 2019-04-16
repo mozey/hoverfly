@@ -1,0 +1,6 @@
+"path": [
+	{
+	   "matcher": "exact",
+	   "value": "/foo/baz/bar/spam"
+	}
+ ]

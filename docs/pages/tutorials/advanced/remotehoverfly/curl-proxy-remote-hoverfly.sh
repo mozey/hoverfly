@@ -1,4 +1,4 @@
-hoverctl mode capture
+hoverctl -t remote mode capture
 curl --proxy http://hoverfly.example.com:8555 http://ip.jsontest.com
-hoverctl mode simulate
+hoverctl -t remote mode simulate
 curl --proxy http://hoverfly.example.com:8555 http://ip.jsontest.com

@@ -7,29 +7,45 @@ import (
 
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+	"github.com/SpectoLabs/hoverfly/core/middleware"
 )
 
 // Configuration - initial structure of configuration
 type Configuration struct {
 	AdminPort    string
 	ProxyPort    string
+	ListenOnHost string
 	Mode         string
 	Destination  string
-	Middleware   Middleware
+	Middleware   middleware.Middleware
 	DatabasePath string
 	Webserver    bool
 
 	TLSVerification bool
 
 	UpstreamProxy string
+	PACFile       []byte
 
-	Verbose     bool
-	Development bool
+	Verbose bool
+
+	DisableCache bool
+	CacheSize int
 
 	SecretKey          []byte
 	JWTExpirationDelta int
 	AuthEnabled        bool
+
+	ProxyAuthorizationHeader string
+
+	HttpsOnly bool
+
+	PlainHttpTunneling bool
+
+	ClientAuthenticationDestination string
+	ClientAuthenticationClientCert  string
+	ClientAuthenticationClientKey   string
+	ClientAuthenticationCACert      string
 
 	ProxyControlWG sync.WaitGroup
 
@@ -63,6 +79,8 @@ const DefaultPort = "8500"
 
 // DefaultAdminPort - default admin interface port
 const DefaultAdminPort = "8888"
+
+const DefaultListenOnHost = "127.0.0.1"
 
 // DefaultDatabasePath - default database name that will be created
 // or used by Hoverfly
@@ -112,6 +130,8 @@ func InitSettings() *Configuration {
 		appConfig.ProxyPort = DefaultPort
 	}
 
+	appConfig.ListenOnHost = DefaultListenOnHost
+
 	// getting external proxy
 	if os.Getenv(HoverflyUpstreamProxyPortEV) != "" {
 		appConfig.UpstreamProxy = os.Getenv(HoverflyUpstreamProxyPortEV)
@@ -129,7 +149,7 @@ func InitSettings() *Configuration {
 	if os.Getenv(HoverflySecretEV) != "" {
 		appConfig.SecretKey = []byte(os.Getenv(HoverflySecretEV))
 	} else {
-		appConfig.SecretKey = GetRandomName(10)
+		appConfig.SecretKey = getRandomName(10)
 	}
 
 	if os.Getenv(HoverflyTokenExpirationEV) != "" {
@@ -155,7 +175,7 @@ func InitSettings() *Configuration {
 	}
 
 	// middleware configuration
-	newMiddleware, _ := ConvertToNewMiddleware(os.Getenv(HoverflyMiddlewareEV))
+	newMiddleware, _ := middleware.ConvertToNewMiddleware(os.Getenv(HoverflyMiddlewareEV))
 
 	appConfig.Middleware = *newMiddleware
 
@@ -164,6 +184,12 @@ func InitSettings() *Configuration {
 	} else {
 		appConfig.TLSVerification = true
 	}
+
+	appConfig.Mode = "simulate"
+
+	appConfig.ProxyAuthorizationHeader = "Proxy-Authorization"
+
+	appConfig.CacheSize = 1000
 
 	return &appConfig
 }

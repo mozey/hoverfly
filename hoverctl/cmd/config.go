@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/SpectoLabs/hoverfly/hoverctl/wrapper"
+	"github.com/SpectoLabs/hoverfly/hoverctl/configuration"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +28,7 @@ in the configuration file.
 
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetFilepath())
-		configData, _ := wrapper.ReadFile(config.GetFilepath())
+		configData, _ := configuration.ReadFile(config.GetFilepath())
 		configLines := strings.Split(string(configData), "\n")
 		for _, line := range configLines {
 			if line != "" {
@@ -38,6 +38,62 @@ in the configuration file.
 	},
 }
 
+var configHostCmd = &cobra.Command{
+	Use:   "host",
+	Short: "Get target host",
+	Long: `
+Gets the config value for the target host"
+`,
+
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(target.Host)
+	},
+}
+
+var configAdminPortCmd = &cobra.Command{
+	Use:   "admin-port",
+	Short: "Get target host",
+	Long: `
+Gets the config value for the target admin port"
+`,
+
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(target.AdminPort)
+	},
+}
+
+var configProxyPortCmd = &cobra.Command{
+	Use:   "proxy-port",
+	Short: "Get target host",
+	Long: `
+Gets the config value for the target proxy port"
+`,
+
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(target.ProxyPort)
+	},
+}
+
+var configAuthTokenCmd = &cobra.Command{
+	Use:   "auth-token",
+	Short: "Get target API token",
+	Long: `
+Gets the config value for the target API token if hoverctl has been logged in"
+`,
+
+	Run: func(cmd *cobra.Command, args []string) {
+		if target.AuthToken == "" {
+			handleIfError(fmt.Errorf("No auth token"))
+		}
+		fmt.Println(target.AuthToken)
+	},
+}
+
 func init() {
 	RootCmd.AddCommand(configCmd)
+
+	configCmd.AddCommand(configHostCmd)
+	configCmd.AddCommand(configAdminPortCmd)
+	configCmd.AddCommand(configProxyPortCmd)
+	configCmd.AddCommand(configAuthTokenCmd)
 }

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/boltdb/bolt"
 )
 
@@ -15,9 +15,6 @@ func NewBoltDBCache(db *bolt.DB, bucket []byte) *BoltCache {
 		CurrentBucket: []byte(bucket),
 	}
 }
-
-// RequestsBucketName - default name for BoltDB bucket
-const RequestsBucketName = "rqbucket"
 
 // BoltCache - container to implement Cache instance with BoltDB backend for storage
 type BoltCache struct {

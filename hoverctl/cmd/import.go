@@ -3,11 +3,10 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/SpectoLabs/hoverfly/hoverctl/configuration"
 	"github.com/SpectoLabs/hoverfly/hoverctl/wrapper"
 	"github.com/spf13/cobra"
 )
-
-var importV1 bool
 
 // importCmd represents the import command
 var importCmd = &cobra.Command{
@@ -20,11 +19,13 @@ must be provided.
 	`,
 
 	Run: func(cmd *cobra.Command, args []string) {
+		checkTargetAndExit(target)
+
 		checkArgAndExit(args, "You have not provided a path to simulation", "import")
-		simulationData, err := wrapper.ReadFile(args[0])
+		simulationData, err := configuration.ReadFile(args[0])
 		handleIfError(err)
 
-		err = hoverfly.ImportSimulation(string(simulationData), importV1)
+		err = wrapper.ImportSimulation(*target, string(simulationData))
 		handleIfError(err)
 
 		fmt.Println("Successfully imported simulation from", args[0])
@@ -33,5 +34,4 @@ must be provided.
 
 func init() {
 	RootCmd.AddCommand(importCmd)
-	importCmd.Flags().BoolVar(&importV1, "v1", false, "Tells Hoverfly that the simulation is formatted according to the old v1 simulation JSON schema used in Hoverfly pre v0.9.0")
 }

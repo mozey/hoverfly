@@ -19,7 +19,7 @@ copyright = u'2017, SpectoLabs'
 author = u'SpectoLabs'
 
 
-version = 'v0.10.2'
+version = 'v1.0.0-rc.2'
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -34,7 +34,7 @@ exclude_patterns = ['_build']
 
 pygments_style = 'sphinx'
 
-todo_include_todos = True
+todo_include_todos = False
 
 if 'READTHEDOCS' not in os.environ:
     import sphinx_rtd_theme

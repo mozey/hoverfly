@@ -7,16 +7,16 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"io/ioutil"
 	"net/http"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/SpectoLabs/hoverfly/core/handlers/v1"
-	"github.com/SpectoLabs/hoverfly/core/interfaces"
+	log "github.com/sirupsen/logrus"
+	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
 	"github.com/SpectoLabs/hoverfly/core/models"
-	. "github.com/SpectoLabs/hoverfly/core/util"
+	"github.com/SpectoLabs/hoverfly/core/state"
 )
 
 // Import is a function that based on input decides whether it is a local resource or whether
@@ -92,24 +92,19 @@ func (hf *Hoverfly) ImportFromDisk(path string) error {
 		return fmt.Errorf("Got error while opening payloads file, error %s", err.Error())
 	}
 
-	var requests v1.RequestResponsePairPayload
+	var simulation v2.SimulationViewV5
 
 	body, err := ioutil.ReadAll(pairsFile)
 	if err != nil {
 		return fmt.Errorf("Got error while parsing payloads, error %s", err.Error())
 	}
 
-	err = json.Unmarshal(body, &requests)
+	err = json.Unmarshal(body, &simulation)
 	if err != nil {
 		return fmt.Errorf("Got error while parsing payloads, error %s", err.Error())
 	}
 
-	requestResponsePairViews := make([]interfaces.RequestResponsePair, len(requests.Data))
-	for i, v := range requests.Data {
-		requestResponsePairViews[i] = v
-	}
-
-	return hf.ImportRequestResponsePairViews(requestResponsePairViews)
+	return hf.PutSimulation(simulation).GetError()
 }
 
 // ImportFromURL - takes one string value and tries connect to a remote server, then parse response body into
@@ -122,98 +117,65 @@ func (hf *Hoverfly) ImportFromURL(url string) error {
 		return fmt.Errorf("Failed to fetch given URL, error %s", err.Error())
 	}
 
-	var requests v1.RequestResponsePairPayload
+	var simulation v2.SimulationViewV5
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("Got error while parsing payloads, error %s", err.Error())
 	}
 
-	err = json.Unmarshal(body, &requests)
+	err = json.Unmarshal(body, &simulation)
 	if err != nil {
 		return fmt.Errorf("Got error while parsing payloads, error %s", err.Error())
 	}
 
-	requestResponsePairViews := make([]interfaces.RequestResponsePair, len(requests.Data))
-	for i, v := range requests.Data {
-		requestResponsePairViews[i] = v
-	}
-
-	return hf.ImportRequestResponsePairViews(requestResponsePairViews)
+	return hf.PutSimulation(simulation).GetError()
 }
 
-func isJSON(s string) bool {
-	var js map[string]interface{}
-	return json.Unmarshal([]byte(s), &js) == nil
-
-}
-
-// ImportRequestResponsePairViews - a function to save given pairs into the database.
-func (hf *Hoverfly) ImportRequestResponsePairViews(pairViews []interfaces.RequestResponsePair) error {
+// importRequestResponsePairViews - a function to save given pairs into the database.
+func (hf *Hoverfly) importRequestResponsePairViews(pairViews []v2.RequestMatcherResponsePairViewV5) v2.SimulationImportResult {
+	importResult := v2.SimulationImportResult{}
+	initialStates := map[string]string{}
 	if len(pairViews) > 0 {
 		success := 0
 		failed := 0
-		for _, pairView := range pairViews {
+		for i, pairView := range pairViews {
 
-			// Convert PayloadView back to Payload for internal storage
-			pair := models.NewRequestResponsePairFromRequestResponsePairView(pairView)
+			pair := models.NewRequestMatcherResponsePairFromView(&pairView)
 
-			if pairView.GetRequest().GetRequestType() != nil && *pairView.GetRequest().GetRequestType() == *StringToPointer("template") {
-				responseDetails := models.NewResponseDetailsFromResponse(pairView.GetResponse())
+			hf.Simulation.AddPair(pair)
+			for k, v := range pair.RequestMatcher.RequiresState {
+				initialStates[k] = v
+			}
+			success++
 
-				requestTemplate := models.RequestTemplate{
-					Path:        pairView.GetRequest().GetPath(),
-					Method:      pairView.GetRequest().GetMethod(),
-					Destination: pairView.GetRequest().GetDestination(),
-					Scheme:      pairView.GetRequest().GetScheme(),
-					Query:       pairView.GetRequest().GetQuery(),
-					Body:        pairView.GetRequest().GetBody(),
-					Headers:     pairView.GetRequest().GetHeaders(),
-				}
-
-				requestTemplateResponsePair := models.RequestTemplateResponsePair{
-					RequestTemplate: requestTemplate,
-					Response:        responseDetails,
-				}
-
-				hf.Simulation.Templates = append(hf.Simulation.Templates, requestTemplateResponsePair)
-				success++
-				continue
+			if pairView.RequestMatcher.DeprecatedQuery != nil && len(pairView.RequestMatcher.DeprecatedQuery) != 0 {
+				importResult.AddDeprecatedQueryWarning(i)
 			}
 
-			if len(pair.Request.Headers) == 0 {
-				pair.Request.Headers = make(map[string][]string)
+			if len(pairView.Response.Headers["Content-Length"]) > 0 && len(pairView.Response.Headers["Transfer-Encoding"]) > 0 {
+				importResult.AddContentLengthAndTransferEncodingWarning(i)
 			}
 
-			if _, present := pair.Request.Headers["Content-Type"]; !present {
-				// sniffing content types
-				if isJSON(pair.Request.Body) {
-					pair.Request.Headers["Content-Type"] = []string{"application/json"}
-				} else {
-					ct := http.DetectContentType([]byte(pair.Request.Body))
-					pair.Request.Headers["Content-Type"] = []string{ct}
+			if len(pairView.Response.Headers["Content-Length"]) > 0 {
+				contentLength, err := strconv.Atoi(pairView.Response.Headers["Content-Length"][0])
+				if err == nil && contentLength != len(pair.Response.Body) {
+					importResult.AddContentLengthMismatchWarning(i)
 				}
 			}
 
-			err := hf.RequestMatcher.SaveRequestResponsePair(&pair)
-			if err != nil {
-				log.WithFields(log.Fields{
-					"error": err.Error(),
-				}).Error("Failed to save payload")
-			}
-
-			if err == nil {
-				success++
-			} else {
-				failed++
-			}
+			continue
 		}
+
+		hf.state = state.NewStateFromState(initialStates)
+
 		log.WithFields(log.Fields{
 			"total":      len(pairViews),
 			"successful": success,
 			"failed":     failed,
 		}).Info("payloads imported")
-		return nil
+		return importResult
 	}
-	return nil
+
+	return importResult
 }

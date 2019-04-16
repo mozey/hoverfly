@@ -16,6 +16,8 @@ type ProxyHttpServer struct {
 	// session variable must be aligned in i386
 	// see http://golang.org/src/pkg/sync/atomic/doc.go#L41
 	sess int64
+	// KeepDestinationHeaders indicates the proxy should retain any headers present in the http.Response before proxying
+	KeepDestinationHeaders bool
 	// setting Verbose to true will log information on each request sent to the proxy
 	Verbose         bool
 	Logger          *log.Logger
@@ -27,18 +29,19 @@ type ProxyHttpServer struct {
 	// ConnectDial will be used to create TCP connections for CONNECT requests
 	// if nil Tr.Dial will be used
 	ConnectDial func(network string, addr string) (net.Conn, error)
+	tlsOnly     bool
 }
 
 var hasPort = regexp.MustCompile(`:\d+$`)
 
-func copyHeaders(dst, src http.Header) {
-	for k, _ := range dst {
-		dst.Del(k)
+func copyHeaders(dst, src http.Header, keepDestHeaders bool) {
+	if !keepDestHeaders {
+		for k := range dst {
+			dst.Del(k)
+		}
 	}
 	for k, vs := range src {
-		for _, v := range vs {
-			dst.Add(k, v)
-		}
+		dst[k] = vs
 	}
 }
 
@@ -89,14 +92,21 @@ func removeProxyHeaders(ctx *ProxyCtx, r *http.Request) {
 	//   options that are desired for that particular connection and MUST NOT
 	//   be communicated by proxies over further connections.
 	r.Header.Del("Connection")
+	// If request.Close is not set to false, the transfer.writeHeader function will still write the "Connection: close" header
+	r.Close = false
 }
 
 // Standard net/http function. Shouldn't be used directly, http.Serve will use it.
 func (proxy *ProxyHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//r.Header["X-Forwarded-For"] = w.RemoteAddr()
+
 	if r.Method == "CONNECT" {
 		proxy.handleHttps(w, r)
 	} else {
+		if proxy.tlsOnly {
+			http.Error(w, "This proxy requires TLS (HTTPS)", 502)
+			return
+		}
 		ctx := &ProxyCtx{Req: r, Session: atomic.AddInt64(&proxy.sess, 1), proxy: proxy}
 
 		var err error
@@ -131,10 +141,17 @@ func (proxy *ProxyHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		// We keep the original body to remove the header only if things changed.
 		// This will prevent problems with HEAD requests where there's no body, yet,
 		// the Content-Length header should be set.
-		if origBody != resp.Body {
-			resp.Header.Del("Content-Length")
-		}
-		copyHeaders(w.Header(), resp.Header)
+
+		// Note from Benji
+		// The way we use goproxy, I do not think this is needed for us
+		// https://github.com/SpectoLabs/hoverfly/issues/697
+		// Hoverfly does not use proxy.filterResponse to change response body, hence the content length is not changed
+		// Hoverfly manages the Content Length header on its own
+
+		// if origBody != resp.Body {
+		// resp.Header.Del("Content-Length")
+		// }
+		copyHeaders(w.Header(), resp.Header, proxy.KeepDestinationHeaders)
 		w.WriteHeader(resp.StatusCode)
 		nr, err := io.Copy(w, resp.Body)
 		if err := resp.Body.Close(); err != nil {
@@ -144,7 +161,11 @@ func (proxy *ProxyHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// New proxy server, logs to StdErr by default
+func (proxy *ProxyHttpServer) DisableNonTls(disableNonTls bool) {
+	proxy.tlsOnly = disableNonTls
+}
+
+// NewProxyHttpServer creates and returns a proxy server, logging to stderr by default
 func NewProxyHttpServer() *ProxyHttpServer {
 	proxy := ProxyHttpServer{
 		Logger:        log.New(os.Stderr, "", log.LstdFlags),
@@ -154,9 +175,9 @@ func NewProxyHttpServer() *ProxyHttpServer {
 		NonproxyHandler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "This is a proxy server. Does not respond to non-proxy requests.", 500)
 		}),
-		Tr: &http.Transport{TLSClientConfig: tlsClientSkipVerify,
-			Proxy: http.ProxyFromEnvironment},
+		Tr: &http.Transport{TLSClientConfig: tlsClientSkipVerify, Proxy: http.ProxyFromEnvironment},
 	}
 	proxy.ConnectDial = dialerFromEnv(&proxy)
+
 	return &proxy
 }
